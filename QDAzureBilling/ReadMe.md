@@ -1,7 +1,21 @@
 ﻿
 # Quick & Dirty Azure Billing Helper
 
-Output example (redacted data)
+### AzureAD setup
+
+ - Azure Active Directory --> App registration ...
+ - Subscription --> IAM --> Add Role assignment
+   - Role: Billing Reader
+   - Select: AAD-Application_name
+ 
+
+
+
+
+### Sample
+
+Output from sample application (redacted data):
+
 ```
 Last billing periods:
  > 05/06/2019 04/07/2019
