@@ -16,6 +16,8 @@ namespace QDAzureBilling_Call
         {
             string baseHtml = File.ReadAllText("report_template.html");
 
+            if (false) { CreateSampleHtmlHistogram(); return; }
+
 
             Billing qdBilling = new Billing()
             {
@@ -31,7 +33,9 @@ namespace QDAzureBilling_Call
             //qdBilling.Authenticate(pp).Wait();
 
             // authentication through AD application secrets
+            Console.WriteLine("\nAuthentication:");
             qdBilling.Authenticate().Wait();
+
 
             Console.WriteLine("\nLast billing periods:");
             var billingPeriods = qdBilling.GetBillingPeriods(5).Result;
@@ -50,6 +54,17 @@ namespace QDAzureBilling_Call
             dailyCosts.ForEach(x => Console.WriteLine($" > {x.DT.ToShortDateString()} : {x.Value}"));
             Console.WriteLine($" * Total: {dailyCosts.Sum(x => x.Value)}");
 
+            Console.WriteLine("\nExtra data for histogram:");
+            List<DailyCost> dailyCostsHisto =
+                qdBilling.GetDailyPeriodCosts(
+                    new TimePeriod()
+                    {
+                        DateFrom = DateTime.UtcNow.AddDays(-60),
+                        DateTo = DateTime.UtcNow
+                    }).Result;
+            string htmlHistogram = BuildHtmlHistogram(dailyCostsHisto, lastBillingPeriod.DateFrom);
+
+
 
             /// HTML Report
             var list2html = new List2HtmlTable()
@@ -59,6 +74,8 @@ namespace QDAzureBilling_Call
             };
 
             baseHtml = baseHtml.Replace("###TOTAL###", servicesCosts.Sum(x => x.Value).ToString("0.00"));
+
+            baseHtml = baseHtml.Replace("###HISTOGRAM###", htmlHistogram);
 
             baseHtml = baseHtml.Replace("###PERIOD###", lastBillingPeriod.DateFrom.ToShortDateString() + " - " +
                                                         lastBillingPeriod.DateTo.ToShortDateString());
@@ -76,5 +93,61 @@ namespace QDAzureBilling_Call
             File.WriteAllText("out.html", baseHtml);
 
         }
+
+
+
+        private static string BuildHtmlHistogram(List<DailyCost> dailyCostsHisto, DateTime cutDate)
+        {
+            double scaleFactor = 100.0 / dailyCostsHisto.Max(x => x.Value);
+
+            var histoData = dailyCostsHisto.Select(item =>
+                                new HtmlHistogram.BarData()
+                                {
+                                    Value = (int)(item.Value * scaleFactor),
+                                    Width = 5,
+                                    BarColor = item.DT < cutDate ? "blue" : "green"
+                                });
+
+            string html = new HtmlHistogram()
+            {
+                TableBackgroundColor = "lightgrey;",
+                TableBorderColor = "lightgrey",
+                TableBorderSize = 5
+            }
+            .Build(histoData, dailyCostsHisto.Max(x => x.Value).ToString("0.00"));
+
+            return html;
+        }
+
+
+
+
+
+        private static void CreateSampleHtmlHistogram()
+        {
+            var sampleData = new HtmlHistogram.BarData[100];
+            for (int i = 0; i < sampleData.Length; i++)
+            {
+                sampleData[i] = new HtmlHistogram.BarData
+                {
+                    Value = (int)(100 + 40 * Math.Sin(i / 10.0)),
+                    BarColor = i < 40 ? "blue" : "green",
+                    Width = 5,
+                    BackgroundColor = (i > 60 && i < 90) ? "orange" : ""
+                };
+            }
+
+            var sampleHtml = new HtmlHistogram()
+            {
+                TableBackgroundColor = "lightgrey;",
+                TableBorderColor = "lightgrey",
+                TableBorderSize = 5
+            }.Build(sampleData, sampleData.Max(x => x.Value).ToString());
+
+            sampleHtml = "<html><body><hr/>" + sampleHtml + "<hr/></body></html>";
+
+            File.WriteAllText("sample.html", sampleHtml);
+        }
+
     }
 }
