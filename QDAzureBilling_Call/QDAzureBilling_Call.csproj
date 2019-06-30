@@ -91,6 +91,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="HtmlHistogram.cs" />
+    <Compile Include="ImgHistogram.cs" />
     <Compile Include="List2HtmlTable.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
