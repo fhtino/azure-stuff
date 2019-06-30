@@ -1,5 +1,6 @@
 ﻿using Microsoft.IdentityModel.Clients.ActiveDirectory;
 using QDAzureBilling;
+using SkiaSharp;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
@@ -7,6 +8,9 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microcharts;
+
+
 
 namespace QDAzureBilling_Call
 {
@@ -16,7 +20,9 @@ namespace QDAzureBilling_Call
         {
             string baseHtml = File.ReadAllText("report_template.html");
 
+            // dev
             if (false) { CreateSampleHtmlHistogram(); return; }
+            if (false) { File.WriteAllBytes("out.png", CreateImgChart(600, 200, Enumerable.Range(10, 30).Select(x => (double)x + DateTime.UtcNow.Ticks % 100), "#266489")); return; }
 
 
             Billing qdBilling = new Billing()
@@ -54,6 +60,7 @@ namespace QDAzureBilling_Call
             dailyCosts.ForEach(x => Console.WriteLine($" > {x.DT.ToShortDateString()} : {x.Value}"));
             Console.WriteLine($" * Total: {dailyCosts.Sum(x => x.Value)}");
 
+
             Console.WriteLine("\nExtra data for histogram:");
             List<DailyCost> dailyCostsHisto =
                 qdBilling.GetDailyPeriodCosts(
@@ -63,6 +70,14 @@ namespace QDAzureBilling_Call
                         DateTo = DateTime.UtcNow
                     }).Result;
             string htmlHistogram = BuildHtmlHistogram(dailyCostsHisto, lastBillingPeriod.DateFrom);
+
+            byte[] chart1Body = CreateImgChart(
+                600, 200,
+                dailyCostsHisto.Where(x => x.DT < lastBillingPeriod.DateFrom).Select(x => x.Value), "#266489",
+                dailyCostsHisto.Where(x => x.DT >= lastBillingPeriod.DateFrom).Select(x => x.Value), "#90D585");
+            File.WriteAllBytes("chart1.png", chart1Body);
+
+
 
 
 
@@ -120,6 +135,45 @@ namespace QDAzureBilling_Call
         }
 
 
+
+        private static byte[] CreateImgChart(int width, int height, IEnumerable<double> valuesA, string colorA, IEnumerable<double> valuesB = null, string colorB = null)
+        {
+            var entries = valuesA.Select(v => new Microcharts.Entry((float)v) { Color = SKColor.Parse(colorA) });
+            if (valuesB != null)
+            {
+                entries = entries.Concat(valuesB.Select(v => new Microcharts.Entry((float)v) { Color = SKColor.Parse(colorB) }));
+            }
+
+            var chart = new Microcharts.LineChart()
+            {
+                LineMode = LineMode.Straight,
+                PointSize = 2,
+                Entries = entries,
+                BackgroundColor = SKColor.Parse("#FFFFFF"),
+                PointMode = Microcharts.PointMode.Circle,
+                Margin = 15
+            };
+
+            SKBitmap bitmap = new SKBitmap(width, height);
+            SKCanvas canvas = new SKCanvas(bitmap);
+            chart.Draw(canvas, width, height);
+
+            string max = entries.Max(x => x.Value).ToString("0.00");
+
+            canvas.DrawText($"{max}_______", 10, 15, new SKPaint()
+            {
+                Style = SKPaintStyle.Fill,
+                IsAntialias = true,
+                Color = SKColors.DarkBlue,
+                TextSize = 14,
+                IsStroke = false,
+                FakeBoldText = true
+            });
+
+            var image = SKImage.FromBitmap(bitmap);
+            var data = image.Encode(SKEncodedImageFormat.Png, 100);
+            return data.ToArray();
+        }
 
 
 
