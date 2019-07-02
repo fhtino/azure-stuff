@@ -65,7 +65,7 @@ namespace QDAzureBilling
         {
             string billingPeriodsURL = $"https://management.azure.com/subscriptions/{SubscriptionId}/providers/Microsoft.Billing/billingPeriods?api-version=2017-04-24-preview&$top={n}";
 
-            var request = new HttpRequestMessage(HttpMethod.Get, billingPeriodsURL);            
+            var request = new HttpRequestMessage(HttpMethod.Get, billingPeriodsURL);
             var responseMessage = await _httpClient.SendAsync(request);
             var billindPeriodRespBody = await responseMessage.Content.ReadAsStringAsync();
             responseMessage.EnsureSuccessStatusCode();
