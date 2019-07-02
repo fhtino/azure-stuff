@@ -7,9 +7,6 @@
  - Subscription --> IAM --> Add Role assignment
    - Role: Billing Reader
    - Select: AAD-Application_name
- 
-
-
 
 
 ### Sample
@@ -124,5 +121,19 @@ Day by day:
      [ 0.0848038570164, "bandwidth", "EUR" ],
      [ 0.0220121319942, "functions", "EUR" ],
 ```
+
+
+## Reference and useful links
+
+REST documentation  
+- https://docs.microsoft.com/en-us/rest/api/cost-management/
+- https://docs.microsoft.com/en-us/rest/api/consumption/
+- https://docs.microsoft.com/en-us/rest/api/billing/
+
+Specification 
+- https://github.com/Azure/azure-rest-api-specs/tree/master/specification
+
+Note: consumption API does not support all type of subscription
+
 
 
