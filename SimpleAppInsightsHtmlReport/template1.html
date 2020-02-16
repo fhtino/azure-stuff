@@ -1,0 +1,128 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+    <style>
+        body {
+            font-family: Arial;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>My simple report</h1>
+    <h2>Using Application Insights data</h2>
+    <br />
+    <table cellspacing="10">
+        <tr>
+            <td colspan="2">
+                <h3>Request last 30 days</h3>
+                <AppInsightData>
+                    <Query>
+                        requests
+                        | where timestamp > ago(30d)
+                        | summarize cnt=sum(itemCount) by bin(timestamp, 1d)
+                        | order by timestamp asc
+                        | project timestamp, cnt
+                    </Query>
+                    <OutMode>IMG</OutMode>
+                    <ImgWidth>500</ImgWidth>
+                    <ImgHeight>200</ImgHeight>
+                    <ImgColor>#0000FF</ImgColor>
+                    <ImgFileName>1.png</ImgFileName>
+                </AppInsightData>
+            </td>
+        </tr>
+        <tr>
+            <td valign="top">
+                <h3>Last day requests</h3>
+                <table border="1" cellspacing="0" cellpadding="3" style="font-size:12px;">
+                    <AppInsightData>
+                        <Query>
+                            requests
+                            | where timestamp > ago(1d)
+                            | summarize cnt=count(), avg_dur=avg(duration) by name
+                            | order by cnt desc
+                            | project Name=substring(name,0,50), cnt, avg_dur
+                        </Query>
+                        <ToStr>##0.00</ToStr>
+                        <Align>l#r#r</Align>
+                        <OutMode>TR</OutMode>
+                        <THeadStyle>background-color:lightblue;font-weight:bold;</THeadStyle>
+                    </AppInsightData>
+                </table>
+            </td>
+            <td valign="top">
+                <h3>Last day failed requests</h3>
+                <table border="1" cellspacing="0" cellpadding="3" style="font-size:12px;">
+                    <AppInsightData>
+                        <Query>
+                            requests
+                            | where timestamp > ago(1d)
+                            | where  success == false
+                            | summarize Cnt=sum(itemCount) by name, resultCode
+                            | order by Cnt desc
+                        </Query>
+                        <Align>l#c#r</Align>
+                        <OutMode>TR</OutMode>
+                        <THeadStyle>background-color:lightblue;font-weight:bold;</THeadStyle>
+                    </AppInsightData>
+                </table>
+                <br />
+                <h3>Last day exceptions</h3>
+                <table border="1" cellspacing="0" cellpadding="3" style="font-size:12px;">
+                    <AppInsightData>
+                        <Query>
+                            exceptions
+                            | where timestamp > ago(1d)
+                            | summarize _count=sum(itemCount) by type
+                            | sort by _count desc
+                        </Query>
+                        <Align>l#r</Align>
+                        <OutMode>TR</OutMode>
+                        <THeadStyle>background-color:lightblue;font-weight:bold;</THeadStyle>
+                    </AppInsightData>
+                </table>
+                <br />
+                <h3>Last day dependencies errors</h3>
+                <table border="1" cellspacing="0" cellpadding="3" style="font-size:12px;">
+                    <AppInsightData>
+                        <Query>
+                            dependencies
+                            | where timestamp > ago(1d)
+                            | where success == false
+                            | summarize cnt=sum(itemCount) by target, name, type, resultCode
+                            | sort by cnt desc
+                        </Query>
+                        <Align>l#l#l#c#r</Align>
+                        <OutMode>TR</OutMode>
+                        <THeadStyle>background-color:lightblue;font-weight:bold;</THeadStyle>
+                    </AppInsightData>
+                </table>
+                <br/>
+                <h3>Last 30 days errors</h3>
+                <table border="1" cellspacing="0" cellpadding="3" style="font-size:12px;">
+                    <AppInsightData>
+                        <Query>
+                            requests
+                            | where timestamp > ago(30d)
+                            | where  success == false
+                            | summarize Cnt=sum(itemCount) by bin(timestamp, 1d)
+                            | order by timestamp desc
+                        </Query>
+                        <ToStr>yyyy-MM-dd#</ToStr>
+                        <Align>l#r</Align>
+                        <OutMode>TR</OutMode>
+                        <THeadStyle>background-color:lightblue;font-weight:bold;</THeadStyle>
+                    </AppInsightData>
+                </table>
+            </td>
+        </tr>
+    </table>
+    <br />
+    <br />
+    <DateUtcNow />
+    <br />
+</body>
+</html>

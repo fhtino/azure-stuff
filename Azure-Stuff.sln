@@ -13,6 +13,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QDAzureBilling", "QDAzureBi
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QDAzureBilling_Call", "QDAzureBilling_Call\QDAzureBilling_Call.csproj", "{4BA27436-F72D-45B7-89AD-4B6DEDE2EE93}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleAppInsightsHtmlReport", "SimpleAppInsightsHtmlReport\SimpleAppInsightsHtmlReport.csproj", "{74D91E9F-7406-464F-AF79-9B6CAC16F632}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{4BA27436-F72D-45B7-89AD-4B6DEDE2EE93}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4BA27436-F72D-45B7-89AD-4B6DEDE2EE93}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4BA27436-F72D-45B7-89AD-4B6DEDE2EE93}.Release|Any CPU.Build.0 = Release|Any CPU
+		{74D91E9F-7406-464F-AF79-9B6CAC16F632}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{74D91E9F-7406-464F-AF79-9B6CAC16F632}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{74D91E9F-7406-464F-AF79-9B6CAC16F632}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{74D91E9F-7406-464F-AF79-9B6CAC16F632}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

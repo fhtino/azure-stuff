@@ -1,0 +1,53 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+    <style>
+        body {
+            font-family: Arial;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>My simple report</h1>
+    <h2>Using Application Insights data</h2>
+    <br />
+    <h3>Request last 30 days</h3>
+    <AppInsightData>
+        <Query>
+            requests
+            | where timestamp > ago(30d)
+            | summarize cnt=sum(itemCount) by bin(timestamp, 1d)
+            | order by timestamp asc
+            | project timestamp, cnt
+        </Query>
+        <OutMode>IMG</OutMode>
+        <ImgWidth>500</ImgWidth>
+        <ImgHeight>200</ImgHeight>
+        <ImgColor>#0000FF</ImgColor>
+        <ImgFileName>1.png</ImgFileName>
+    </AppInsightData>
+    <br/>
+    <table border="1" cellspacing="0" cellpadding="4" style="font-size:12px;">
+        <AppInsightData>
+            <Query>
+                requests
+                | where timestamp > ago(30d)
+                | summarize cnt=sum(itemCount) by bin(timestamp, 1d)
+                | order by timestamp asc
+                | project timestamp, cnt
+            </Query>
+            <ToStr></ToStr>
+            <Align>l#r#r</Align>
+            <OutMode>TR</OutMode>
+            <THeadStyle>background-color:lightblue;font-weight:bold;</THeadStyle>
+        </AppInsightData>
+    </table>
+    <br />
+    <br />
+    <DateUtcNow />
+    <br />
+</body>
+</html>
