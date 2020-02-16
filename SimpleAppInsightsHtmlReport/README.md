@@ -84,6 +84,10 @@ Output:
 
 ## Application ID and Key 
 You need Application ID and Key values for accessing Application Insights API (Azure Portal --> application insights --> API access)  
+
+![Create API key](imgs/apikey_creation.png)
+
+
 The values can be stored directly inside the html template or somewhere else and pass them explicitelly to the ReportBuilder.
 In the former case, remmber to protect the template file because of sensitive data it contains. 
 However that sensitive data will be removed from the output, resulting in a plain standard html.
