@@ -1,5 +1,5 @@
 ﻿using Microcharts;
-using Microsoft.Azure.ApplicationInsights;
+using Microsoft.Azure.ApplicationInsights.Query;
 using SkiaSharp;
 using System;
 using System.Collections.Generic;
@@ -61,19 +61,18 @@ namespace SimpleAppInsightsHtmlReport
             var nodeList = xdoc.SelectNodes("//AppInsightData").Cast<XmlElement>();
 
             // Palellize calls to improve performance
-            Parallel.ForEach<XmlElement>(nodeList, (node) =>
+            Parallel.ForEach<XmlElement>(nodeList, new ParallelOptions() { }, (node) =>
             {
-                // setup Application Insights client
-                var apikeyAuth = new ApiKeyClientCredentials(appInsCfg.ApiKey);
-                var appInsightsClient = new ApplicationInsightsDataClient(apikeyAuth);
-                appInsightsClient.AppId = appInsCfg.AppID;
-
                 var xsAppInsightData = new XmlSerializer(typeof(AppInsightData));
                 var aid = (AppInsightData)xsAppInsightData.Deserialize(new StringReader(node.OuterXml));
                 aid.CleanUp();
 
+                // setup Application Insights client
+                var apikeyAuth = new ApiKeyClientCredentials(appInsCfg.ApiKey);
+                var appInsightsClient = new ApplicationInsightsDataClient(apikeyAuth);
+
                 // Get data from Application Insights API
-                var queryResult = appInsightsClient.Query(aid.Query);
+                var queryResult = appInsightsClient.Query.Execute(appInsCfg.AppID, aid.Query);
                 var tableResult = queryResult.Tables[0];
                 string[,] matrix = AppInsightTableToMatrix(tableResult, aid.ToStrList);
 
@@ -89,7 +88,7 @@ namespace SimpleAppInsightsHtmlReport
                 {
                     byte[] imgBody = CreateImgChart(
                         aid.ImgWidth, aid.ImgHeight, aid.ImgColor, true,
-                        tableResult.Rows.Select(row => Double.Parse(row[1], CultureInfo.InvariantCulture)).ToArray());
+                        tableResult.Rows.Select(row => Double.Parse(row[1].ToString(), CultureInfo.InvariantCulture)).ToArray());
 
                     report.Images.Add(aid.ImgFileName, imgBody);
                     htmlFragment = $"<img src=\"{aid.ImgFileName}\" />";
@@ -126,7 +125,7 @@ namespace SimpleAppInsightsHtmlReport
         /// <summary>
         /// ...
         /// </summary>
-        private string[,] AppInsightTableToMatrix(Microsoft.Azure.ApplicationInsights.Models.Table table,
+        private string[,] AppInsightTableToMatrix(Microsoft.Azure.ApplicationInsights.Query.Models.Table table,
                                                   List<string> toStringRules)
         {
             // App Insighrs types (???) :  string, int, long, real, timespan, datetime, bool, guid, dynamic 
@@ -143,7 +142,7 @@ namespace SimpleAppInsightsHtmlReport
             {
                 for (int c = 0; c < table.Columns.Count; c++)
                 {
-                    string fieldValue = table.Rows[r][c];
+                    object fieldValue = table.Rows[r][c];
                     string toStringRule = toStringRules[c];
 
                     string body;
@@ -151,17 +150,17 @@ namespace SimpleAppInsightsHtmlReport
                     switch (table.Columns[c].Type)
                     {
                         case "string":
-                            body = fieldValue;
+                            body = fieldValue.ToString();
                             break;
                         case "datetime":
-                            var dt = DateTime.Parse(fieldValue, CultureInfo.InvariantCulture);
+                            DateTime dt = (DateTime)fieldValue;
                             body = String.IsNullOrEmpty(toStringRule) ? dt.ToString() : dt.ToString(toStringRule);
                             break;
                         case "long":
-                            body = Int64.Parse(fieldValue, CultureInfo.InvariantCulture).ToString();
+                            body = ((Int64)fieldValue).ToString();
                             break;
                         case "real":
-                            var x = Double.Parse(fieldValue, CultureInfo.InvariantCulture);
+                            var x = (double)fieldValue;
                             body = String.IsNullOrEmpty(toStringRule) ? x.ToString() : x.ToString(toStringRule);
                             break;
                         default:
