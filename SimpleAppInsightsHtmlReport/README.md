@@ -1,12 +1,12 @@
 ﻿## Simple report using data from Application Insights
 
-The tool builds a html report starting from a html template containing Kusto Application Insights queries.
-The queries output is tranformed into html tables and png images and inserted into the final html.
+The tool builds an html report starting from an html template containing Kusto Application Insights queries.
+The queries output is tranformed into html tables or png images and inserted into the final html.
 The resulting html can be saved locally or easily sent by email after embedding images as "CID:".
 
-**Note**: the HTML template must be a valid XML because it is processed using XmlDocument.
+**Note**: the HTML template must be a valid XML file because it will be processed as an xml document (XmlDocument class).
    
-Template fragment tranformed into a html table:
+Template fragment tranformed into an html table:
 
 ```html
 ...
@@ -81,6 +81,12 @@ Output:
   <img src="1.png" />
 ```
 
+![Report Chart](imgs/report_chart.png)
+
+
+<br/>
+<br/>
+
 
 ## Application ID and Key 
 You need Application ID and Key values for accessing Application Insights API (Azure Portal --> application insights --> API access)  
@@ -89,19 +95,22 @@ You need Application ID and Key values for accessing Application Insights API (A
 
 
 The values can be stored directly inside the html template or somewhere else and pass them explicitelly to the ReportBuilder.
-In the former case, remmber to protect the template file because of sensitive data it contains. 
-However that sensitive data will be removed from the output, resulting in a plain standard html.
+In the former case, remember to protect the template file because of sensitive data it contains. 
 
 Storing inside html template:
 ```html
-...
-<AppInsightsConfig>
-   <AppID>abc.......</AppID>
-   <ApiKey>xyz.....</ApiKey>
-</AppInsightsConfig>
+<html>
+<head>
+    ...
+    <meta name="Report_EmailSubject" content="My website report - #DT#" />
+    <meta name="Report_ToEmailList" content="foo@localhost#bar@localhost" />
+    <meta name="Report_AppInsightID" content="ID..." />
+    <meta name="Report_AppInsightApiKey" content="KEY..." />
+    ...
+</head>
 ...
 ```
-
+Note: this configuration meta tag will be removed from the output html.
 
 <br/>
 <br/>

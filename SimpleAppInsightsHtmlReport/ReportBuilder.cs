@@ -6,93 +6,68 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net.Mail;
+using System.Net.Mime;
 using System.Text;
 using System.Xml;
 using System.Xml.Serialization;
+using System.Threading.Tasks;
+
 
 namespace SimpleAppInsightsHtmlReport
 {
 
+    // ------------------------------------------------
     // !!! Single CS file with all required classes !!!
+    // ------------------------------------------------
 
 
     public class ReportBuilder
     {
-
-        // ---------------------------------------------------------
-        public class Report
-        {
-            public string HTML { get; set; }
-            public Dictionary<string, byte[]> Images { get; set; }
-        }
-
-        public class AppInsightsConfig
-        {
-            public string AppID { get; set; }
-            public string ApiKey { get; set; }
-
-        }
-
-        public class AppInsightData
-        {
-            public string Query { get; set; }
-            public string ToStr { get; set; }
-            public string Align { get; set; }
-            public string OutMode { get; set; }
-            public string THeadStyle { get; set; }
-            public string ImgFileName { get; set; }
-            public int ImgWidth { get; set; }
-            public int ImgHeight { get; set; }
-            public string ImgColor { get; set; }
-
-            [XmlIgnore]
-            public List<string> ToStrList { get; set; }
-
-            [XmlIgnore]
-            public List<string> AlignList { get; set; }
-
-            public void CleanUp()
-            {
-                Query = Query.Trim(' ', '\r', '\n');
-                ToStrList = (ToStr + "").Split('#').Select(x => x.Trim()).ToList();
-                AlignList = (Align + "").Split('#').Select(x => x.Trim()).ToList();
-            }
-        }
-        // ---------------------------------------------------------
-
-
 
         /// <summary>
         /// ...
         /// </summary>
         public Report Exec(string htmlTemplateFilename, AppInsightsConfig appInsCfg)
         {
+            var startDT = DateTime.UtcNow;
+
             var report = new Report() { Images = new Dictionary<string, byte[]>() };
 
             var xdoc = new XmlDocument();
             xdoc.Load(htmlTemplateFilename);
 
+            // read meta from head and cleanup them
+            var nodeElements = xdoc.SelectNodes("/html/head/meta[starts-with(@name,'Report_')]").Cast<XmlElement>().ToList();
+            report.MetaValues = nodeElements.ToDictionary(x => x.GetAttribute("name"), x => x.GetAttribute("content"));
+            nodeElements.ForEach(x => { x.ParentNode.RemoveChild(x); });
+
+            // try to read Application Insights ID and Key from template
             if (appInsCfg == null)
             {
-                var appInsightsConfigNode = xdoc.SelectSingleNode("//AppInsightsConfig");
-                if (appInsightsConfigNode != null)
+                appInsCfg = new AppInsightsConfig()
                 {
-                    appInsCfg = (AppInsightsConfig)new XmlSerializer(typeof(AppInsightsConfig))
-                                .Deserialize(new StringReader(appInsightsConfigNode.OuterXml));
-                    appInsightsConfigNode.ParentNode.RemoveChild(appInsightsConfigNode);
-                }
+                    AppID = report.MetaValues["Report_AppInsightID"],
+                    ApiKey = report.MetaValues["Report_AppInsightApiKey"]
+                };
             }
 
-            // setup Application Insights client
-            var apikeyAuth = new ApiKeyClientCredentials(appInsCfg.ApiKey);
-            var appInsightsClient = new ApplicationInsightsDataClient(apikeyAuth);
-            appInsightsClient.AppId = appInsCfg.AppID;
+            //// setup Application Insights client
+            //var apikeyAuth = new ApiKeyClientCredentials(appInsCfg.ApiKey);
+            //var appInsightsClient = new ApplicationInsightsDataClient(apikeyAuth);
+            //appInsightsClient.AppId = appInsCfg.AppID;
 
             // Process nodes
-            var nodeList = xdoc.SelectNodes("//AppInsightData");
+            var nodeList = xdoc.SelectNodes("//AppInsightData").Cast<XmlElement>();
 
-            foreach (XmlElement node in nodeList)
+            // Palellize calls to improve performance
+            Parallel.ForEach<XmlElement>(nodeList, (node) =>
             {
+                // setup Application Insights client
+                var apikeyAuth = new ApiKeyClientCredentials(appInsCfg.ApiKey);
+                var appInsightsClient = new ApplicationInsightsDataClient(apikeyAuth);
+                appInsightsClient.AppId = appInsCfg.AppID;
+
                 var xsAppInsightData = new XmlSerializer(typeof(AppInsightData));
                 var aid = (AppInsightData)xsAppInsightData.Deserialize(new StringReader(node.OuterXml));
                 aid.CleanUp();
@@ -128,12 +103,20 @@ namespace SimpleAppInsightsHtmlReport
                 docFrag.InnerXml = htmlFragment;
                 var parentNode = node.ParentNode;
                 parentNode.ReplaceChild(docFrag, node);
-            }
-
+            });
 
             ReplaceTag(xdoc, "DateUtcNow", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"));
+            ReplaceTag(xdoc, "ElapsedTime", DateTime.UtcNow.Subtract(startDT).TotalSeconds.ToString("0.00"));
 
             report.HTML = xdoc.OuterXml;
+
+            //var sb = new StringBuilder();
+            //xdoc.Save(XmlWriter.Create(sb,
+            //                           new XmlWriterSettings()
+            //                           {
+            //                               Indent = true,
+            //                               IndentChars = " "
+            //                           }));
 
             return report;
         }
@@ -144,7 +127,7 @@ namespace SimpleAppInsightsHtmlReport
         /// ...
         /// </summary>
         private string[,] AppInsightTableToMatrix(Microsoft.Azure.ApplicationInsights.Models.Table table,
-                                                         List<string> toStringRules)
+                                                  List<string> toStringRules)
         {
             // App Insighrs types (???) :  string, int, long, real, timespan, datetime, bool, guid, dynamic 
 
@@ -312,6 +295,89 @@ namespace SimpleAppInsightsHtmlReport
             var imageData = image.Encode(SKEncodedImageFormat.Png, 100);
             return imageData.ToArray();
         }
+
+
+
+
+        // ------------------------------------------------------------------------------------------------
+        // ------------------------------------------------------------------------------------------------
+        // ------------------------------------------------------------------------------------------------
+
+        public class Report
+        {
+            public string HTML { get; set; }
+            public Dictionary<string, byte[]> Images { get; set; }
+            public Dictionary<string, string> MetaValues { get; set; }
+
+            public MailMessage ConvertToEmail(string fromEmail)
+            {
+                string[] toEmailList = MetaValues["Report_ToEmailList"].Split('#');
+
+                var linkedResources = new List<LinkedResource>();
+                var xdoc = new XmlDocument();
+                xdoc.LoadXml(this.HTML);
+                foreach (XmlElement imgNode in xdoc.SelectNodes("//img"))
+                {
+                    string imgSrc = imgNode.GetAttribute("src");
+                    byte[] imgBody = this.Images[imgSrc];
+                    var linkedIMG = new LinkedResource(new MemoryStream(imgBody), "image/png");
+                    linkedResources.Add(linkedIMG);
+                    imgNode.SetAttribute("src", "CID:" + linkedIMG.ContentId);
+                }
+
+                var alternateView = AlternateView.CreateAlternateViewFromString(xdoc.OuterXml, null, MediaTypeNames.Text.Html);
+                linkedResources.ForEach(alternateView.LinkedResources.Add);
+                var emailMsg = new MailMessage()
+                {
+                    From = new MailAddress(fromEmail),
+                    Subject = MetaValues["Report_EmailSubject"].Replace("#DT#", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")),
+                    IsBodyHtml = true,
+                    AlternateViews = { alternateView },
+                };
+                toEmailList.ToList().ForEach(emailMsg.To.Add);
+
+                return emailMsg;
+            }
+
+        }
+
+        public class AppInsightsConfig
+        {
+            public string AppID { get; set; }
+            public string ApiKey { get; set; }
+
+        }
+
+        public class AppInsightData
+        {
+            public string Query { get; set; }
+            public string ToStr { get; set; }
+            public string Align { get; set; }
+            public string OutMode { get; set; }
+            public string THeadStyle { get; set; }
+            public string ImgFileName { get; set; }
+            public int ImgWidth { get; set; }
+            public int ImgHeight { get; set; }
+            public string ImgColor { get; set; }
+
+            [XmlIgnore]
+            public List<string> ToStrList { get; set; }
+
+            [XmlIgnore]
+            public List<string> AlignList { get; set; }
+
+            public void CleanUp()
+            {
+                Query = Query.Trim(' ', '\r', '\n');
+                ToStrList = (ToStr + "").Split('#').Select(x => x.Trim()).ToList();
+                AlignList = (Align + "").Split('#').Select(x => x.Trim()).ToList();
+            }
+        }
+
+        // ------------------------------------------------------------------------------------------------
+        // ------------------------------------------------------------------------------------------------
+        // ------------------------------------------------------------------------------------------------        
+
     }
 
 }
