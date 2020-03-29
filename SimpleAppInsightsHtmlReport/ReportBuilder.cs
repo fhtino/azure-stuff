@@ -25,17 +25,27 @@ namespace SimpleAppInsightsHtmlReport
     public class ReportBuilder
     {
 
+
+        public Report Exec(string htmlTemplateFilename, AppInsightsConfig appInsCfg)
+        {
+            using (var fs = File.OpenRead(htmlTemplateFilename))
+            {
+                return Exec(fs, appInsCfg);
+            }
+        }
+
+
         /// <summary>
         /// ...
         /// </summary>
-        public Report Exec(string htmlTemplateFilename, AppInsightsConfig appInsCfg)
+        public Report Exec(Stream inputStream, AppInsightsConfig appInsCfg)
         {
             var startDT = DateTime.UtcNow;
 
             var report = new Report() { Images = new Dictionary<string, byte[]>() };
 
             var xdoc = new XmlDocument();
-            xdoc.Load(htmlTemplateFilename);
+            xdoc.Load(inputStream);
 
             // read meta from head and cleanup them
             var nodeElements = xdoc.SelectNodes("/html/head/meta[starts-with(@name,'Report_')]").Cast<XmlElement>().ToList();
@@ -179,7 +189,6 @@ namespace SimpleAppInsightsHtmlReport
         /// <summary>
         /// ...
         /// </summary>
-
         private string Matrix2Html(string[,] matrix, string[] columnNames, List<string> aligns, string THeadStyle)
         {
             while (aligns.Count < matrix.GetLength(1))
@@ -232,7 +241,6 @@ namespace SimpleAppInsightsHtmlReport
         /// <summary>
         /// ...
         /// </summary>
-
         private void ReplaceTag(XmlDocument xdoc, string tagName, string value)
         {
             foreach (XmlNode node in xdoc.SelectNodes("//" + tagName))
@@ -247,8 +255,7 @@ namespace SimpleAppInsightsHtmlReport
         /// <summary>
         /// Simple chart using Microcharts library (based on SkiaSharp)
         /// </summary>
-
-        public static byte[] CreateImgChart(int width,
+        private static byte[] CreateImgChart(int width,
                                             int height,
                                             string colorStr,
                                             bool showValueLabels,
