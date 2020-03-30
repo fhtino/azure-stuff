@@ -26,11 +26,11 @@ namespace SimpleAppInsightsHtmlReport
     {
 
 
-        public Report Exec(string htmlTemplateFilename, AppInsightsConfig appInsCfg)
+        public async Task<Report> Exec(string htmlTemplateFilename, AppInsightsConfig appInsCfg)
         {
             using (var fs = File.OpenRead(htmlTemplateFilename))
             {
-                return Exec(fs, appInsCfg);
+                return await Exec(fs, appInsCfg);
             }
         }
 
@@ -38,7 +38,7 @@ namespace SimpleAppInsightsHtmlReport
         /// <summary>
         /// ...
         /// </summary>
-        public Report Exec(Stream inputStream, AppInsightsConfig appInsCfg)
+        public async Task<Report> Exec(Stream inputStream, AppInsightsConfig appInsCfg)
         {
             var startDT = DateTime.UtcNow;
 
@@ -62,16 +62,13 @@ namespace SimpleAppInsightsHtmlReport
                 };
             }
 
-            //// setup Application Insights client
-            //var apikeyAuth = new ApiKeyClientCredentials(appInsCfg.ApiKey);
-            //var appInsightsClient = new ApplicationInsightsDataClient(apikeyAuth);
-            //appInsightsClient.AppId = appInsCfg.AppID;
+            // Process nodes using palellel calls to improve performance
+            //   Note: Parallel.ForEach<XmlElement>(nodeList, new ParallelOptions() { }, async (node) => ...
+            //         does not work as expected. As far as I have understood, I cannot create an "async" Parallel.For
 
-            // Process nodes
             var nodeList = xdoc.SelectNodes("//AppInsightData").Cast<XmlElement>();
 
-            // Palellize calls to improve performance
-            Parallel.ForEach<XmlElement>(nodeList, new ParallelOptions() { }, (node) =>
+            Func<XmlElement, Task> puppa = async (node) =>
             {
                 var xsAppInsightData = new XmlSerializer(typeof(AppInsightData));
                 var aid = (AppInsightData)xsAppInsightData.Deserialize(new StringReader(node.OuterXml));
@@ -82,7 +79,8 @@ namespace SimpleAppInsightsHtmlReport
                 var appInsightsClient = new ApplicationInsightsDataClient(apikeyAuth);
 
                 // Get data from Application Insights API
-                var queryResult = appInsightsClient.Query.Execute(appInsCfg.AppID, aid.Query);
+                //var queryResult = appInsightsClient.Query.Execute(appInsCfg.AppID, aid.Query);
+                var queryResult = await appInsightsClient.Query.ExecuteAsync(appInsCfg.AppID, aid.Query);
                 var tableResult = queryResult.Tables[0];
                 string[,] matrix = AppInsightTableToMatrix(tableResult, aid.ToStrList);
 
@@ -112,7 +110,10 @@ namespace SimpleAppInsightsHtmlReport
                 docFrag.InnerXml = htmlFragment;
                 var parentNode = node.ParentNode;
                 parentNode.ReplaceChild(docFrag, node);
-            });
+            };
+
+            await Task.WhenAll(nodeList.Select(n => puppa(n)));
+
 
             ReplaceTag(xdoc, "DateUtcNow", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"));
             ReplaceTag(xdoc, "ElapsedTime", DateTime.UtcNow.Subtract(startDT).TotalSeconds.ToString("0.00"));

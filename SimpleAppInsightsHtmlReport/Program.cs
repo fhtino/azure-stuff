@@ -29,7 +29,7 @@ namespace SimpleAppInsightsHtmlReport
             ReportBuilder.AppInsightsConfig cfg = null;
 
             // Build report
-            var report = new ReportBuilder().Exec("../../../template2.donotcommit.html", cfg);
+            var report = new ReportBuilder().Exec("../../../template2.donotcommit.html", cfg).Result;
 
             // Save html and images
             System.IO.File.WriteAllText("report.html", report.HTML);
