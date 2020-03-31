@@ -168,11 +168,16 @@ namespace SimpleAppInsightsHtmlReport
                             body = String.IsNullOrEmpty(toStringRule) ? dt.ToString() : dt.ToString(toStringRule);
                             break;
                         case "long":
-                            body = ((Int64)fieldValue).ToString();
+                            long longValue = (long)fieldValue;
+                            body = String.IsNullOrEmpty(toStringRule) ? longValue.ToString() : longValue.ToString(toStringRule);
                             break;
                         case "real":
-                            var x = (double)fieldValue;
-                            body = String.IsNullOrEmpty(toStringRule) ? x.ToString() : x.ToString(toStringRule);
+                            double realValue = (double)fieldValue;
+                            body = String.IsNullOrEmpty(toStringRule) ? realValue.ToString() : realValue.ToString(toStringRule);
+                            break;
+                        case "int":
+                            long intValue = (long)fieldValue;  // ??? I don't know wht "int" is mapped as long
+                            body = String.IsNullOrEmpty(toStringRule) ? intValue.ToString() : intValue.ToString(toStringRule);
                             break;
                         default:
                             body = "[" + fieldValue + "]";
