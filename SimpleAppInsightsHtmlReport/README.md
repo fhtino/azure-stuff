@@ -1,4 +1,4 @@
-﻿## Simple report using data from Application Insights
+# Simple report using data from Application Insights
 
 The tool builds an html report starting from an html template containing Kusto Application Insights queries.
 The queries output is tranformed into html tables or png images and inserted into the final html.
