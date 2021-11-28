@@ -68,7 +68,7 @@ namespace SimpleAppInsightsHtmlReport
 
             var nodeList = xdoc.SelectNodes("//AppInsightData").Cast<XmlElement>();
 
-            Func<XmlElement, Task> puppa = async (node) =>
+            Func<XmlElement, Task> ProcessNode = async (XmlElement node) =>
             {
                 var xsAppInsightData = new XmlSerializer(typeof(AppInsightData));
                 var aid = (AppInsightData)xsAppInsightData.Deserialize(new StringReader(node.OuterXml));
@@ -78,8 +78,7 @@ namespace SimpleAppInsightsHtmlReport
                 var apikeyAuth = new ApiKeyClientCredentials(appInsCfg.ApiKey);
                 var appInsightsClient = new ApplicationInsightsDataClient(apikeyAuth);
 
-                // Get data from Application Insights API
-                //var queryResult = appInsightsClient.Query.Execute(appInsCfg.AppID, aid.Query);
+                // Get data from Application Insights API                
                 var queryResult = await appInsightsClient.Query.ExecuteAsync(appInsCfg.AppID, aid.Query);
                 var tableResult = queryResult.Tables[0];
                 string[,] matrix = AppInsightTableToMatrix(tableResult, aid.ToStrList);
@@ -92,14 +91,17 @@ namespace SimpleAppInsightsHtmlReport
                     var columnsNames = tableResult.Columns.Select(x => x.Name).ToArray();
                     htmlFragment = Matrix2Html(matrix, columnsNames, aid.AlignList, aid.THeadStyle);
                 }
-                else if (aid.OutMode == "IMG")   // CID  ???
+                else if (aid.OutMode == "IMG" || aid.OutMode == "IMG-EMB")
                 {
                     byte[] imgBody = CreateImgChart(
                         aid.ImgWidth, aid.ImgHeight, aid.ImgColor, true,
                         tableResult.Rows.Select(row => Double.Parse(row[1].ToString(), CultureInfo.InvariantCulture)).ToArray());
 
                     report.Images.Add(aid.ImgFileName, imgBody);
-                    htmlFragment = $"<img src=\"{aid.ImgFileName}\" />";
+
+                    htmlFragment = aid.OutMode == "IMG" ?
+                        $"<img src=\"{aid.ImgFileName}\" />" :
+                        $"<img src=\"data:image/png;base64,{Convert.ToBase64String(imgBody)}\" />";
                 }
                 else
                 {
@@ -112,21 +114,12 @@ namespace SimpleAppInsightsHtmlReport
                 parentNode.ReplaceChild(docFrag, node);
             };
 
-            await Task.WhenAll(nodeList.Select(n => puppa(n)));
-
+            await Task.WhenAll(nodeList.Select(n => ProcessNode(n)));
 
             ReplaceTag(xdoc, "DateUtcNow", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"));
             ReplaceTag(xdoc, "ElapsedTime", DateTime.UtcNow.Subtract(startDT).TotalSeconds.ToString("0.00"));
 
             report.HTML = xdoc.OuterXml;
-
-            //var sb = new StringBuilder();
-            //xdoc.Save(XmlWriter.Create(sb,
-            //                           new XmlWriterSettings()
-            //                           {
-            //                               Indent = true,
-            //                               IndentChars = " "
-            //                           }));
 
             return report;
         }
