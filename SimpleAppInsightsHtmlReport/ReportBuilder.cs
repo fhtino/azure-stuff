@@ -12,7 +12,7 @@ using System.Text;
 using System.Xml;
 using System.Xml.Serialization;
 using System.Threading.Tasks;
-
+using System.Collections.Concurrent;
 
 namespace SimpleAppInsightsHtmlReport
 {
@@ -42,14 +42,18 @@ namespace SimpleAppInsightsHtmlReport
         {
             var startDT = DateTime.UtcNow;
 
-            var report = new Report() { Images = new Dictionary<string, byte[]>() };
+            var report = new Report() { Images = new ConcurrentDictionary<string, byte[]>() };
 
             var xdoc = new XmlDocument();
             xdoc.Load(inputStream);
 
             // read meta from head and cleanup them
             var nodeElements = xdoc.SelectNodes("/html/head/meta[starts-with(@name,'Report_')]").Cast<XmlElement>().ToList();
-            report.MetaValues = nodeElements.ToDictionary(x => x.GetAttribute("name"), x => x.GetAttribute("content"));
+            //report.MetaValues = nodeElements.ToDictionary(x => x.GetAttribute("name"), x => x.GetAttribute("content"));
+            report.MetaValues = new ConcurrentDictionary<string, string>(
+                                        nodeElements.Select(n => new KeyValuePair<string, string>(n.GetAttribute("name"), n.GetAttribute("content"))));
+
+
             nodeElements.ForEach(x => { x.ParentNode.RemoveChild(x); });
 
             // try to read Application Insights ID and Key from template
@@ -97,7 +101,8 @@ namespace SimpleAppInsightsHtmlReport
                         aid.ImgWidth, aid.ImgHeight, aid.ImgColor, true,
                         tableResult.Rows.Select(row => Double.Parse(row[1].ToString(), CultureInfo.InvariantCulture)).ToArray());
 
-                    report.Images.Add(aid.ImgFileName, imgBody);
+                    //report.Images.add(aid.ImgFileName, imgBody);
+                    report.Images[aid.ImgFileName] = imgBody;
 
                     htmlFragment = aid.OutMode == "IMG" ?
                         $"<img src=\"{aid.ImgFileName}\" />" :
@@ -311,8 +316,8 @@ namespace SimpleAppInsightsHtmlReport
         public class Report
         {
             public string HTML { get; set; }
-            public Dictionary<string, byte[]> Images { get; set; }
-            public Dictionary<string, string> MetaValues { get; set; }
+            public ConcurrentDictionary<string, byte[]> Images { get; set; }
+            public ConcurrentDictionary<string, string> MetaValues { get; set; }
 
             public MailMessage ConvertToEmail(string fromEmail)
             {
