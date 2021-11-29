@@ -170,7 +170,11 @@ namespace SimpleAppInsightsHtmlReport
                             body = String.IsNullOrEmpty(toStringRule) ? longValue.ToString() : longValue.ToString(toStringRule);
                             break;
                         case "real":
-                            double realValue = (double)fieldValue;
+                            // Sometime (rarely) the cell is filled with a long value instead of a double value.
+                            // Not clear if it's library bug or an Application Insights API bug (to be investigated... in the future... maybe)
+                            double realValue;
+                            try { realValue = (double)fieldValue; }
+                            catch (InvalidCastException) { realValue = (double)(long)fieldValue; }
                             body = String.IsNullOrEmpty(toStringRule) ? realValue.ToString() : realValue.ToString(toStringRule);
                             break;
                         case "int":
@@ -267,10 +271,10 @@ namespace SimpleAppInsightsHtmlReport
         {
             var color = SKColor.Parse(colorStr);
 
-            var entries = new List<Microcharts.Entry>();
+            var entries = new List<Microcharts.ChartEntry>();
             for (int i = 0; i < values.Length; i++)
             {
-                var entry = new Microcharts.Entry((float)values[i]);
+                var entry = new Microcharts.ChartEntry((float)values[i]);
                 entry.Color = color;
                 entries.Add(entry);
             }
@@ -282,7 +286,8 @@ namespace SimpleAppInsightsHtmlReport
                 Entries = entries,
                 BackgroundColor = SKColor.Parse("#FFFFFF"),
                 PointMode = Microcharts.PointMode.Circle,
-                Margin = 15
+                Margin = 15,
+                IsAnimated = false
             };
 
             SKBitmap bitmap = new SKBitmap(width, height);
