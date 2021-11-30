@@ -1,6 +1,4 @@
-﻿using Microcharts;
-using Microsoft.Azure.ApplicationInsights.Query;
-using SkiaSharp;
+﻿using Microsoft.Azure.ApplicationInsights.Query;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -13,6 +11,7 @@ using System.Xml;
 using System.Xml.Serialization;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
+
 
 namespace SimpleAppInsightsHtmlReport
 {
@@ -261,56 +260,25 @@ namespace SimpleAppInsightsHtmlReport
 
 
         /// <summary>
-        /// Simple chart using Microcharts library (based on SkiaSharp)
+        /// Simple chart using ScottPlot
         /// </summary>
         private static byte[] CreateImgChart(int width,
-                                            int height,
-                                            string colorStr,
-                                            bool showValueLabels,
-                                            double[] values)
+                                           int height,
+                                           string colorStr,
+                                           bool showValueLabels,
+                                           double[] values)
         {
-            var color = SKColor.Parse(colorStr);
+            var plot = new ScottPlot.Plot(width, height);
+            plot.AddScatter(Enumerable.Range(0, values.Length).Select(n => (double)n).ToArray(), values, color: System.Drawing.Color.DarkBlue);
 
-            var entries = new List<Microcharts.ChartEntry>();
-            for (int i = 0; i < values.Length; i++)
-            {
-                var entry = new Microcharts.ChartEntry((float)values[i]);
-                entry.Color = color;
-                entries.Add(entry);
-            }
+            var maxLine = plot.AddHorizontalLine(values.Max());
+            maxLine.Color = System.Drawing.Color.DarkRed;
+            maxLine.LineWidth = 1;
+            maxLine.PositionLabel = true;
+            maxLine.PositionLabelBackground = maxLine.Color;            
 
-            var chart = new Microcharts.LineChart()
-            {
-                LineMode = LineMode.Straight,
-                PointSize = 2,
-                Entries = entries,
-                BackgroundColor = SKColor.Parse("#FFFFFF"),
-                PointMode = Microcharts.PointMode.Circle,
-                Margin = 15,
-                IsAnimated = false
-            };
-
-            SKBitmap bitmap = new SKBitmap(width, height);
-            SKCanvas canvas = new SKCanvas(bitmap);
-            chart.Draw(canvas, width, height);
-
-            // My "max"
-            string max = entries.Max(x => x.Value).ToString("0.00");
-            canvas.DrawText($"{max}_______", 10, 15, new SKPaint()
-            {
-                Style = SKPaintStyle.Fill,
-                IsAntialias = true,
-                Color = SKColors.DarkBlue,
-                TextSize = 14,
-                IsStroke = false,
-                FakeBoldText = true
-            });
-
-            var image = SKImage.FromBitmap(bitmap);
-            var imageData = image.Encode(SKEncodedImageFormat.Png, 100);
-            return imageData.ToArray();
+            return plot.GetImageBytes();
         }
-
 
 
 
