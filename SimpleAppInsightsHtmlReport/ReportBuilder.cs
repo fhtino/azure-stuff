@@ -302,10 +302,13 @@ namespace SimpleAppInsightsHtmlReport
                 foreach (XmlElement imgNode in xdoc.SelectNodes("//img"))
                 {
                     string imgSrc = imgNode.GetAttribute("src");
-                    byte[] imgBody = this.Images[imgSrc];
-                    var linkedIMG = new LinkedResource(new MemoryStream(imgBody), "image/png");
-                    linkedResources.Add(linkedIMG);
-                    imgNode.SetAttribute("src", "CID:" + linkedIMG.ContentId);
+                    if (!imgSrc.StartsWith("data:"))
+                    {
+                        byte[] imgBody = this.Images[imgSrc];
+                        var linkedIMG = new LinkedResource(new MemoryStream(imgBody), "image/png");
+                        linkedResources.Add(linkedIMG);
+                        imgNode.SetAttribute("src", "CID:" + linkedIMG.ContentId);
+                    }
                 }
 
                 var alternateView = AlternateView.CreateAlternateViewFromString(xdoc.OuterXml, null, MediaTypeNames.Text.Html);
