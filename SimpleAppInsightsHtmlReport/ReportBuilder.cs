@@ -11,7 +11,7 @@ using System.Xml;
 using System.Xml.Serialization;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
-
+using System.Drawing;
 
 namespace SimpleAppInsightsHtmlReport
 {
@@ -97,7 +97,7 @@ namespace SimpleAppInsightsHtmlReport
                 else if (aid.OutMode == "IMG" || aid.OutMode == "IMG-EMB")
                 {
                     byte[] imgBody = CreateImgChart(
-                        aid.ImgWidth, aid.ImgHeight, aid.ImgColor, true,
+                        aid.ImgWidth, aid.ImgHeight, aid.ImgColor, aid.ImgColorShadow,
                         tableResult.Rows.Select(row => Double.Parse(row[1].ToString(), CultureInfo.InvariantCulture)).ToArray());
 
                     //report.Images.add(aid.ImgFileName, imgBody);
@@ -263,19 +263,32 @@ namespace SimpleAppInsightsHtmlReport
         /// Simple chart using ScottPlot
         /// </summary>
         private static byte[] CreateImgChart(int width,
-                                           int height,
-                                           string colorStr,
-                                           bool showValueLabels,
-                                           double[] values)
+                                             int height,
+                                             string colorRGB,
+                                             string shadowColorRGB,
+                                             double[] values)
         {
+            double[] dataX = Enumerable.Range(0, values.Length).Select(n => (double)n).ToArray();
+
             var plot = new ScottPlot.Plot(width, height);
-            plot.AddScatter(Enumerable.Range(0, values.Length).Select(n => (double)n).ToArray(), values, color: System.Drawing.Color.DarkBlue);
+
+            if (!String.IsNullOrEmpty(shadowColorRGB))
+            {
+                var fillChart = plot.AddFill(dataX, values, color: ColorTranslator.FromHtml(shadowColorRGB));
+                fillChart.LineWidth = 0;
+            }
+
+            plot.AddScatter(dataX, values, color: ColorTranslator.FromHtml(colorRGB));
 
             var maxLine = plot.AddHorizontalLine(values.Max());
             maxLine.Color = System.Drawing.Color.DarkRed;
             maxLine.LineWidth = 1;
             maxLine.PositionLabel = true;
-            maxLine.PositionLabelBackground = maxLine.Color;            
+            maxLine.PositionLabelBackground = maxLine.Color;
+
+            plot.XAxis.Ticks(false);
+
+            plot.SetAxisLimitsY(0, values.Max() * 1.1);
 
             return plot.GetImageBytes();
         }
@@ -345,6 +358,8 @@ namespace SimpleAppInsightsHtmlReport
             public int ImgWidth { get; set; }
             public int ImgHeight { get; set; }
             public string ImgColor { get; set; }
+            public string ImgColorShadow { get; set; }
+            
 
             [XmlIgnore]
             public List<string> ToStrList { get; set; }
