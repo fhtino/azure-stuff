@@ -25,45 +25,57 @@ namespace SimpleAppInsightsHtmlReport
     {
 
 
-        public async Task<Report> Exec(string htmlTemplateFilename, AppInsightsConfig appInsCfg)
-        {
-            using (var fs = File.OpenRead(htmlTemplateFilename))
-            {
-                return await Exec(fs, appInsCfg);
-            }
-        }
+        private ReportSetup _reportSetup;
+
+        public List<string> Logs = new List<string>();
+
+        public bool ErrorPresent { get; internal set; }
+
+
+        private void DoLog(string msg) { Logs.Add($"{DateTime.UtcNow.ToString("O")} > {msg}"); }
+
 
 
         /// <summary>
         /// ...
         /// </summary>
-        public async Task<Report> Exec(Stream inputStream, AppInsightsConfig appInsCfg)
+        public async Task<Report> Exec(string htmlTemplateFilename)
+        {
+            using (var fs = File.OpenRead(htmlTemplateFilename))
+            {
+                return await Exec(fs);
+            }
+        }
+
+
+
+
+
+        /// <summary>
+        /// ...
+        /// </summary>
+        public async Task<Report> Exec(Stream inputStream)
         {
             var startDT = DateTime.UtcNow;
 
-            var report = new Report() { Images = new ConcurrentDictionary<string, byte[]>() };
+            Logs.Clear();
+            ErrorPresent = false;
 
+            DoLog("START");
+
+            // Read Report HTML
             var xdoc = new XmlDocument();
+            var xdocLocker = new object();
             xdoc.Load(inputStream);
 
-            // read meta from head and cleanup them
-            var nodeElements = xdoc.SelectNodes("/html/head/meta[starts-with(@name,'Report_')]").Cast<XmlElement>().ToList();
-            //report.MetaValues = nodeElements.ToDictionary(x => x.GetAttribute("name"), x => x.GetAttribute("content"));
-            report.MetaValues = new ConcurrentDictionary<string, string>(
-                                        nodeElements.Select(n => new KeyValuePair<string, string>(n.GetAttribute("name"), n.GetAttribute("content"))));
+            // Read ReportSetup section
+            ReadReportSetupFromHtml(xdoc);
 
+            // Setup Report object
+            var report = new Report() { Images = new ConcurrentDictionary<string, byte[]>() };
+            report.EmailSubject = _reportSetup.Title;
+            report.EmailTOList = _reportSetup.EmailTOList;
 
-            nodeElements.ForEach(x => { x.ParentNode.RemoveChild(x); });
-
-            // try to read Application Insights ID and Key from template
-            if (appInsCfg == null)
-            {
-                appInsCfg = new AppInsightsConfig()
-                {
-                    AppID = report.MetaValues["Report_AppInsightID"],
-                    ApiKey = report.MetaValues["Report_AppInsightApiKey"]
-                };
-            }
 
             // Process nodes using palellel calls to improve performance
             //   Note: Parallel.ForEach<XmlElement>(nodeList, new ParallelOptions() { }, async (node) => ...
@@ -73,49 +85,83 @@ namespace SimpleAppInsightsHtmlReport
 
             Func<XmlElement, Task> ProcessNode = async (XmlElement node) =>
             {
-                var xsAppInsightData = new XmlSerializer(typeof(AppInsightData));
-                var aid = (AppInsightData)xsAppInsightData.Deserialize(new StringReader(node.OuterXml));
-                aid.CleanUp();
+                DoLog("Process element");
 
-                // setup Application Insights client
-                var apikeyAuth = new ApiKeyClientCredentials(appInsCfg.ApiKey);
-                var appInsightsClient = new ApplicationInsightsDataClient(apikeyAuth);
+                string htmlFragment = "[UNDEF]";
 
-                // Get data from Application Insights API                
-                var queryResult = await appInsightsClient.Query.ExecuteAsync(appInsCfg.AppID, aid.Query);
-                var tableResult = queryResult.Tables[0];
-                string[,] matrix = AppInsightTableToMatrix(tableResult, aid.ToStrList);
-
-                string htmlFragment;
-
-                // Build Html/Images
-                if (aid.OutMode == "TR")
+                try
                 {
-                    var columnsNames = tableResult.Columns.Select(x => x.Name).ToArray();
-                    htmlFragment = Matrix2Html(matrix, columnsNames, aid.AlignList, aid.THeadStyle);
+                    var xsAppInsightData = new XmlSerializer(typeof(AppInsightData));
+                    var aid = (AppInsightData)xsAppInsightData.Deserialize(new StringReader(node.OuterXml));
+                    aid.CleanUp();
+
+                    // setup Application Insights client
+                    string apiKey = _reportSetup.AppInsightsConnections[aid.ConnectionID].ApiKey;
+                    string appID = _reportSetup.AppInsightsConnections[aid.ConnectionID].AppID;
+                    var appInsightsClient = new ApplicationInsightsDataClient(new ApiKeyClientCredentials(apiKey));
+
+                    // Get data from Application Insights API                
+                    var queryResult = await appInsightsClient.Query.ExecuteAsync(appID, aid.Query);
+                    var tableResult = queryResult.Tables[0];
+
+                    // Add a fake Now="0" at the end if values are missing at the end of the sequence
+                    if (aid.BackwardCheckPeriods.HasValue &&
+                        aid.BackwardCheckPeriods.Value > 0 &&
+                        tableResult.Rows.Count > aid.BackwardCheckPeriods.Value)
+                    {
+                        if ((DateTime.UtcNow).Subtract((DateTime)tableResult.Rows[^1][0]) >
+                            ((DateTime)tableResult.Rows[^1][0]).Subtract((DateTime)tableResult.Rows[^(aid.BackwardCheckPeriods.Value + 1)][0]))
+                        {
+                            tableResult.Rows.Add(new List<object>() { DateTime.UtcNow, 0.0 });
+                        }
+                    }
+
+                    // Build Html/Images                   
+                    if (tableResult.Rows.Count == 0)
+                    {
+                        htmlFragment = "[Error: missing data]";
+                    }
+                    else if (aid.OutMode == "TR")
+                    {
+                        string[,] matrix = AppInsightTableToMatrix(tableResult, aid.ToStrList);
+                        var columnsNames = tableResult.Columns.Select(x => x.Name).ToArray();
+                        htmlFragment = Matrix2Html(matrix, columnsNames, aid.AlignList, aid.THeadStyle);
+                    }
+                    else if (aid.OutMode == "IMG" || aid.OutMode == "IMG-EMB")
+                    {
+                        byte[] imgBody = CreateImgChart(
+                            aid.ImgWidth, aid.ImgHeight, aid.ImgColor, aid.ImgColorShadow,
+                            tableResult.Rows.Select(row => (DateTime)row[0]).ToArray(),
+                            tableResult.Rows.Select(row => Double.Parse(row[1].ToString(), CultureInfo.InvariantCulture)).ToArray());
+
+                        if (String.IsNullOrEmpty(aid.ImgFileName))
+                            aid.ImgFileName = $"img_{Guid.NewGuid().ToString()}.png";
+
+                        report.Images[aid.ImgFileName] = imgBody;
+
+                        htmlFragment = aid.OutMode == "IMG" ?
+                                        $"<img src=\"{aid.ImgFileName}\" />" :
+                                        $"<img src=\"data:image/png;base64,{Convert.ToBase64String(imgBody)}\" />";
+                    }
+                    else
+                    {
+                        throw new ApplicationException("Unknown OutMode");
+                    }
                 }
-                else if (aid.OutMode == "IMG" || aid.OutMode == "IMG-EMB")
+                catch (Exception ex)
                 {
-                    byte[] imgBody = CreateImgChart(
-                        aid.ImgWidth, aid.ImgHeight, aid.ImgColor, aid.ImgColorShadow,
-                        tableResult.Rows.Select(row => Double.Parse(row[1].ToString(), CultureInfo.InvariantCulture)).ToArray());
-
-                    //report.Images.add(aid.ImgFileName, imgBody);
-                    report.Images[aid.ImgFileName] = imgBody;
-
-                    htmlFragment = aid.OutMode == "IMG" ?
-                        $"<img src=\"{aid.ImgFileName}\" />" :
-                        $"<img src=\"data:image/png;base64,{Convert.ToBase64String(imgBody)}\" />";
+                    DoLog($"ERROR: {ex.ToString()}");
+                    htmlFragment = $"ERROR: {ex.Message}";
+                    ErrorPresent = true;
                 }
-                else
+
+                // Replace <AppInsightData> tag with generated HTML
+                lock (xdocLocker)
                 {
-                    throw new ApplicationException("Unknown OutMode");
+                    XmlDocumentFragment docFrag = xdoc.CreateDocumentFragment();
+                    docFrag.InnerXml = htmlFragment;
+                    node.ParentNode.ReplaceChild(docFrag, node);
                 }
-
-                XmlDocumentFragment docFrag = xdoc.CreateDocumentFragment();
-                docFrag.InnerXml = htmlFragment;
-                var parentNode = node.ParentNode;
-                parentNode.ReplaceChild(docFrag, node);
             };
 
             await Task.WhenAll(nodeList.Select(n => ProcessNode(n)));
@@ -124,6 +170,8 @@ namespace SimpleAppInsightsHtmlReport
             ReplaceTag(xdoc, "ElapsedTime", DateTime.UtcNow.Subtract(startDT).TotalSeconds.ToString("0.00"));
 
             report.HTML = xdoc.OuterXml;
+
+            DoLog("END");
 
             return report;
         }
@@ -266,49 +314,111 @@ namespace SimpleAppInsightsHtmlReport
                                              int height,
                                              string colorRGB,
                                              string shadowColorRGB,
-                                             double[] values)
+                                             DateTime[] timeX,
+                                             double[] valuesY)
         {
-            double[] dataX = Enumerable.Range(0, values.Length).Select(n => (double)n).ToArray();
+            //int numOfItems = values.Length;
+            //double[] dataX = Enumerable.Range(0, values.Length).Select(n => (double)n).ToArray();
+            //double[] dataX = Enumerable.Range(-numOfItems, numOfItems).Select(n => (double)n).ToArray();
 
+            double[] dataX = timeX.Select(x => x.ToOADate()).ToArray();
+
+            // Plot area
             var plot = new ScottPlot.Plot(width, height);
 
+            // Chart "shade"
             if (!String.IsNullOrEmpty(shadowColorRGB))
             {
-                var fillChart = plot.AddFill(dataX, values, color: ColorTranslator.FromHtml(shadowColorRGB));
+                var fillChart = plot.AddFill(dataX, valuesY, color: ColorTranslator.FromHtml(shadowColorRGB));
                 fillChart.LineWidth = 0;
             }
 
-            plot.AddScatter(dataX, values, color: ColorTranslator.FromHtml(colorRGB));
+            // Draw gray areas for missing values
+            // (I use the double of the diff to avoid some "border" cases).
+            for (int i = 1; i < timeX.Length - 1; i++)
+            {
+                var diff1 = timeX[i].Subtract(timeX[i - 1]);
+                var diff2 = timeX[i + 1].Subtract(timeX[i]);
+                if (diff2 > 2 * diff1)
+                {
+                    var x = plot.AddHorizontalSpan(
+                                    timeX[i].ToOADate(), timeX[i + 1].ToOADate(),
+                                    color: System.Drawing.Color.LightGray);
+                }
+            }
 
-            var maxLine = plot.AddHorizontalLine(values.Max());
+            // Main chart
+            plot.AddScatter(dataX, valuesY, color: ColorTranslator.FromHtml(colorRGB));
+
+            // Max line
+            var maxLine = plot.AddHorizontalLine(valuesY.Max());
             maxLine.Color = System.Drawing.Color.DarkRed;
             maxLine.LineWidth = 1;
             maxLine.PositionLabel = true;
             maxLine.PositionLabelBackground = maxLine.Color;
 
-            plot.XAxis.Ticks(false);
-
-            plot.SetAxisLimitsY(0, values.Max() * 1.1);
+            // Set axis limits and format
+            plot.SetAxisLimitsY(0, valuesY.Max() * 1.1);
+            plot.XAxis.DateTimeFormat(true);
+            //plot.XAxis.ManualTickSpacing(1, ScottPlot.Ticks.DateTimeUnit.Day);
+            //plot.XAxis.TickLabelStyle(rotation: 90);
+            //plot.XAxis.Ticks(false);
 
             return plot.GetImageBytes();
         }
 
 
+        private void ReadReportSetupFromHtml(XmlDocument xdoc)
+        {
+            DoLog("Read ReportSetup tag");
+
+            XmlElement reportSetupXE = xdoc.SelectSingleNode("/html/head/ReportSetup") as XmlElement;
+            if (reportSetupXE is null)
+                throw new ApplicationException("Cannot fint ReportSetup xml tag");
+
+            _reportSetup = new ReportSetup();
+            _reportSetup.Title = reportSetupXE["Report"].GetAttribute("Title");
+            _reportSetup.EmailTOList = reportSetupXE["Email"].GetAttribute("ToList").Split("#").ToList();
+            _reportSetup.AppInsightsConnections = new Dictionary<string, AppInsightsConfig>();
+
+            foreach (var connectionItem in reportSetupXE.SelectNodes("AppInsightsConnections/Connection").Cast<XmlElement>())
+            {
+                _reportSetup.AppInsightsConnections.Add(
+                    connectionItem.GetAttribute("ID"),
+                    new AppInsightsConfig()
+                    {
+                        AppID = connectionItem.GetAttribute("AppInsightID"),
+                        ApiKey = connectionItem.GetAttribute("AppInsightApiKey")
+                    });
+            }
+
+            // remove "ReportSetup" section from HTML
+            reportSetupXE.ParentNode.RemoveChild(reportSetupXE);
+        }
+
+
+
 
         // ------------------------------------------------------------------------------------------------
         // ------------------------------------------------------------------------------------------------
         // ------------------------------------------------------------------------------------------------
+        // ------------------------------------------------------------------------------------------------
+        // ------------------------------------------------------------------------------------------------
+        // ------------------------------------------------------------------------------------------------
+
+
 
         public class Report
         {
             public string HTML { get; set; }
             public ConcurrentDictionary<string, byte[]> Images { get; set; }
-            public ConcurrentDictionary<string, string> MetaValues { get; set; }
+            public List<string> EmailTOList { get; set; }
+            public string EmailSubject { get; set; }
+
 
             public MailMessage ConvertToEmail(string fromEmail)
             {
-                string[] toEmailList = MetaValues["Report_ToEmailList"].Split('#');
-
+                // Prepare images bodies
                 var linkedResources = new List<LinkedResource>();
                 var xdoc = new XmlDocument();
                 xdoc.LoadXml(this.HTML);
@@ -324,16 +434,17 @@ namespace SimpleAppInsightsHtmlReport
                     }
                 }
 
+                // Build email message
                 var alternateView = AlternateView.CreateAlternateViewFromString(xdoc.OuterXml, null, MediaTypeNames.Text.Html);
                 linkedResources.ForEach(alternateView.LinkedResources.Add);
                 var emailMsg = new MailMessage()
                 {
                     From = new MailAddress(fromEmail),
-                    Subject = MetaValues["Report_EmailSubject"].Replace("#DT#", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")),
+                    Subject = EmailSubject.Replace("#DT#", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")),
                     IsBodyHtml = true,
                     AlternateViews = { alternateView },
                 };
-                toEmailList.ToList().ForEach(emailMsg.To.Add);
+                EmailTOList.ForEach(emailMsg.To.Add);
 
                 return emailMsg;
             }
@@ -347,8 +458,19 @@ namespace SimpleAppInsightsHtmlReport
 
         }
 
+
+        public class ReportSetup
+        {
+            public string Title { get; set; }
+            public List<string> EmailTOList { get; set; }
+            public Dictionary<string, AppInsightsConfig> AppInsightsConnections { get; set; }
+        }
+
+
+
         public class AppInsightData
         {
+            public string ConnectionID { get; set; }
             public string Query { get; set; }
             public string ToStr { get; set; }
             public string Align { get; set; }
@@ -359,7 +481,7 @@ namespace SimpleAppInsightsHtmlReport
             public int ImgHeight { get; set; }
             public string ImgColor { get; set; }
             public string ImgColorShadow { get; set; }
-            
+            public int? BackwardCheckPeriods { get; set; }
 
             [XmlIgnore]
             public List<string> ToStrList { get; set; }
@@ -374,6 +496,7 @@ namespace SimpleAppInsightsHtmlReport
                 AlignList = (Align + "").Split('#').Select(x => x.Trim()).ToList();
             }
         }
+
 
         // ------------------------------------------------------------------------------------------------
         // ------------------------------------------------------------------------------------------------

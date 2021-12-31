@@ -7,38 +7,37 @@ using System.Net.Mail;
 using System.Net;
 using System.Net.Mime;
 using System.Collections.Generic;
-
+using System.Threading.Tasks;
 
 namespace SimpleAppInsightsHtmlReport
 {
     class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             var configuration = new ConfigurationBuilder()
                 .AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true)
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                 .Build();
 
-            // we can read Application Insight ID and Key from an external file or from html template
-            //var cfg = new ReportBuilder.AppInsightsConfig()
-            //{
-            //    AppID = configuration.GetValue<string>("AppID"),
-            //    ApiKey = configuration.GetValue<string>("ApiKey")
-            //};
-            ReportBuilder.AppInsightsConfig cfg = null;
+            // Build the report
+            var reportBuilder = new ReportBuilder();
+            var report = await reportBuilder.Exec("../../../template3.donotcommit.html");
+            reportBuilder.Logs.ForEach(Console.WriteLine);
+            Console.WriteLine(reportBuilder.ErrorPresent);
 
-            // Build report
-            var report = new ReportBuilder().Exec("../../../template2.donotcommit.html", cfg).Result;
-
-            // Save html and images
+            // Save html and images to local hard-disk
             System.IO.File.WriteAllText("report.html", report.HTML);
             foreach (var img in report.Images)
             {
                 System.IO.File.WriteAllBytes(img.Key, img.Value);
             }
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("report.html") { UseShellExecute = true });
+          
 
-            // Send email
+            return;
+
+            // Send the email
             if (!String.IsNullOrEmpty(configuration["SmtpFrom"]))
             {
                 MailMessage emailMsg = report.ConvertToEmail(configuration["SmtpFrom"]);

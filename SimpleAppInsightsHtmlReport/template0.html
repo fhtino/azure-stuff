@@ -9,10 +9,14 @@
             font-size: 12px;
         }
     </style>
-    <meta name="Report_EmailSubject" content="My website report - #DT#" />
-    <meta name="Report_ToEmailList" content="foo@localhost#bar@localhost" />
-    <meta name="Report_AppInsightID" content="ID..." />
-    <meta name="Report_AppInsightApiKey" content="KEY..." />
+    <ReportSetup>
+        <Report Title="My website report - #DT#" />
+        <Email ToList="foo@localhost#bar@localhost" />
+        <AppInsightsConnections>
+            <Connection ID="App1" AppInsightID="..." AppInsightApiKey="..." />
+            <Connection ID="App2" AppInsightID="..." AppInsightApiKey="..." />
+        </AppInsightsConnections>
+    </ReportSetup>
 </head>
 <body>
     <h1>My simple report</h1>
@@ -20,6 +24,7 @@
     <br />
     <h3>Request last 30 days</h3>
     <AppInsightData>
+        <ConnectionID>App1</ConnectionID>
         <Query>
             requests
             | where timestamp > ago(30d)
@@ -33,9 +38,10 @@
         <ImgColor>#0000FF</ImgColor>
         <ImgFileName>1.png</ImgFileName>
     </AppInsightData>
-    <br/>
+    <br />
     <table border="1" cellspacing="0" cellpadding="4" style="font-size:12px;">
         <AppInsightData>
+            <ConnectionID>App2</ConnectionID>
             <Query>
                 requests
                 | where timestamp > ago(30d)
