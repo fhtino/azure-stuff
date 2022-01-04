@@ -363,7 +363,7 @@ namespace SimpleAppInsightsHtmlReport
             //plot.XAxis.ManualTickSpacing(1, ScottPlot.Ticks.DateTimeUnit.Day);
             //plot.XAxis.TickLabelStyle(rotation: 90);
             //plot.XAxis.Ticks(false);
-
+            
             return plot.GetImageBytes();
         }
 
@@ -430,7 +430,7 @@ namespace SimpleAppInsightsHtmlReport
                         byte[] imgBody = this.Images[imgSrc];
                         var linkedIMG = new LinkedResource(new MemoryStream(imgBody), "image/png");
                         linkedResources.Add(linkedIMG);
-                        imgNode.SetAttribute("src", "CID:" + linkedIMG.ContentId);
+                        imgNode.SetAttribute("src", "cid:" + linkedIMG.ContentId);
                     }
                 }
 

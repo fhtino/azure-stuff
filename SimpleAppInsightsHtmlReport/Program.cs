@@ -34,7 +34,6 @@ namespace SimpleAppInsightsHtmlReport
             }
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("report.html") { UseShellExecute = true });
           
-
             return;
 
             // Send the email
