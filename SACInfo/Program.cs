@@ -64,7 +64,7 @@ namespace SACInfo
             // Initialize root directory
             directories[""] = new DirectoryInfo { Name = "(root)", FullPath = "" };
 
-            await foreach (BlobItem blob in containerClient.GetBlobsAsync())
+            await foreach (BlobItem blob in containerClient.GetBlobsAsync(BlobTraits.None, BlobStates.None, prefix: null, cancellationToken: default))
             {
                 string blobPath = blob.Name;
                 long blobSize = blob.Properties.ContentLength ?? 0;
@@ -92,25 +92,24 @@ namespace SACInfo
                     }
                 }
 
-                // Add file info to all parent directories
-                currentPath = "";
-                for (int i = 0; i < pathParts.Length - 1; i++)
+                // Determine the immediate parent directory of the file
+                string immediateParentPath = "";
+                if (pathParts.Length > 1)
                 {
-                    currentPath = string.IsNullOrEmpty(currentPath) 
-                        ? pathParts[i] 
-                        : currentPath + "/" + pathParts[i];
-
-                    directories[currentPath].FilesInDirectory++;
-                    directories[currentPath].SizeInDirectory += blobSize;
-                    directories[currentPath].TotalFilesIncludingSubdirs++;
-                    directories[currentPath].TotalSizeIncludingSubdirs += blobSize;
+                    // File is in a subdirectory
+                    for (int i = 0; i < pathParts.Length - 1; i++)
+                    {
+                        if (i == 0)
+                            immediateParentPath = pathParts[i];
+                        else
+                            immediateParentPath += "/" + pathParts[i];
+                    }
                 }
+                // else: file is in root (immediateParentPath stays "")
 
-                // Also count for root
-                directories[""].FilesInDirectory++;
-                directories[""].SizeInDirectory += blobSize;
-                directories[""].TotalFilesIncludingSubdirs++;
-                directories[""].TotalSizeIncludingSubdirs += blobSize;
+                // Add file count and size to immediate parent directory only
+                directories[immediateParentPath].FilesInDirectory++;
+                directories[immediateParentPath].SizeInDirectory += blobSize;
             }
 
             // Calculate recursive statistics properly
