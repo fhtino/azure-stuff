@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
-VisualStudioVersion = 18.0.11222.15 d18.0
+VisualStudioVersion = 18.0.11222.15
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{B8711A1C-811C-43BD-B68D-2DE148212ABF}"
 	ProjectSection(SolutionItems) = preProject
@@ -20,6 +20,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AppendBlobSlowness", "AppendBlobSlowness\AppendBlobSlowness.csproj", "{8B5A65C6-7CA4-4FE9-B0DF-2443862FF813}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SACInfo", "SACInfo\SACInfo.csproj", "{55026540-FEA6-91D8-1EA6-EB571D81FB84}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StorageReadWrite", "StorageReadWrite\StorageReadWrite.csproj", "{B24494CB-6361-49DC-94F9-5C41C7252323}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -51,6 +53,10 @@ Global
 		{55026540-FEA6-91D8-1EA6-EB571D81FB84}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{55026540-FEA6-91D8-1EA6-EB571D81FB84}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{55026540-FEA6-91D8-1EA6-EB571D81FB84}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B24494CB-6361-49DC-94F9-5C41C7252323}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B24494CB-6361-49DC-94F9-5C41C7252323}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B24494CB-6361-49DC-94F9-5C41C7252323}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B24494CB-6361-49DC-94F9-5C41C7252323}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
